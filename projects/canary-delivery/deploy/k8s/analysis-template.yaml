@@ -1,0 +1,40 @@
+# The go/no-go rules for a canary. Each check runs every 10s against
+# Prometheus. A check fails if the canary's error rate is over 5% or its p95
+# latency is over 250 ms. failureLimit: 1 allows one failed check (for example
+# a noisy first sample); a second failure aborts the rollout.
+#
+# isNaN() guards the case where the canary has no traffic yet: no data counts
+# as a failed check, never as a pass.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: canary-health
+  namespace: canary-demo
+spec:
+  args:
+    - name: canary-hash
+    - name: prometheus-address
+      value: http://prometheus.canary-demo.svc.cluster.local:9090
+  metrics:
+    - name: error-rate
+      initialDelay: 30s
+      interval: 10s
+      failureLimit: 1
+      successCondition: len(result) > 0 && !isNaN(result[0]) && result[0] <= 0.05
+      provider:
+        prometheus:
+          address: "{{args.prometheus-address}}"
+          query: |
+            sum(rate(http_requests_total{namespace="canary-demo", pod_template_hash="{{args.canary-hash}}", code=~"5.."}[30s]))
+            /
+            sum(rate(http_requests_total{namespace="canary-demo", pod_template_hash="{{args.canary-hash}}"}[30s]))
+    - name: p95-latency
+      initialDelay: 30s
+      interval: 10s
+      failureLimit: 1
+      successCondition: len(result) > 0 && !isNaN(result[0]) && result[0] <= 0.25
+      provider:
+        prometheus:
+          address: "{{args.prometheus-address}}"
+          query: |
+            histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace="canary-demo", pod_template_hash="{{args.canary-hash}}"}[30s])))
