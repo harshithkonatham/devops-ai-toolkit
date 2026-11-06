@@ -1,0 +1,216 @@
+# CI/CD pipeline for projects/canary-delivery: progressive delivery with
+# automatic rollback.
+#
+#   test ─┐
+#         ├─► image (build, CVE scan) ─► canary (kind + Argo Rollouts + Prometheus)
+#   lint ─┘                                v1 deployed
+#                                          v2 healthy   → promoted
+#                                          v3 50% errors → rolled back automatically
+#                                          v4 slow       → rolled back automatically
+#                                          users only ever see the stable version
+#
+# Every third-party action is pinned to a full commit SHA, and each job gets
+# only the permissions it needs.
+
+name: canary-delivery
+
+on:
+  push:
+    paths:
+      - "projects/canary-delivery/**"
+      - ".github/workflows/canary-delivery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: projects/canary-delivery
+
+env:
+  UV_VERSION: "0.13.0"
+  PYTHON_VERSION: "3.14"
+  CHECKOV_VERSION: "3.3.29"
+  PROMETHEUS_VERSION: "v3.5.0"
+  IMAGE: canary-demo:dev
+
+jobs:
+  test:
+    name: Lint, type-check and test the app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          working-directory: projects/canary-delivery
+          enable-cache: true
+      - name: Install locked dev dependencies
+        run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check --output-format=github .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Mypy (strict)
+        run: uv run mypy
+      - name: Bandit (medium severity and above fails the build)
+        run: uv run bandit -q -r src -ll
+      - name: Tests (coverage gate 90%)
+        run: uv run pytest --cov --cov-report=term --cov-fail-under=90 --junitxml=junit.xml
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: canary-delivery-test-results
+          path: projects/canary-delivery/junit.xml
+          retention-days: 14
+
+  lint:
+    name: Lint Dockerfile, manifests, scripts and Prometheus config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: projects/canary-delivery/Dockerfile
+          failure-threshold: warning
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Checkov (Dockerfile)
+        run: uvx checkov@${{ env.CHECKOV_VERSION }} --compact --framework dockerfile -f Dockerfile
+      - name: Checkov (Kubernetes manifests)
+        run: uvx checkov@${{ env.CHECKOV_VERSION }} --compact --framework kubernetes -d deploy/k8s
+      - name: Kustomize renders
+        run: kubectl kustomize deploy/k8s > /dev/null
+      - name: ShellCheck
+        working-directory: projects/canary-delivery/scripts
+        run: shellcheck -x ./*.sh
+      - name: Prometheus config is valid
+        run: |
+          docker run --rm -v "$PWD/deploy/k8s/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool "prom/prometheus:${PROMETHEUS_VERSION}" \
+            check config /etc/prometheus/prometheus.yml
+
+  image:
+    name: Build and scan container
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: projects/canary-delivery
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+          provenance: false
+      - name: Scan image for CVEs (Grype; fail on fixable high/critical)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ env.IMAGE }}
+          severity-cutoff: high
+          only-fixed: true
+          output-format: sarif
+          output-file: grype.sarif
+      - name: Upload image scan results
+        if: ${{ !cancelled() && hashFiles('grype.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: grype.sarif
+          category: grype-canary-demo
+      - name: Save image for the canary job
+        run: docker save "$IMAGE" -o /tmp/canary-demo.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: canary-demo-image
+          path: /tmp/canary-demo.tar
+          retention-days: 1
+
+  canary:
+    name: Canary releases on Kubernetes (kind + Argo Rollouts)
+    needs: [image, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: canary-demo-image
+          path: /tmp
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          cluster_name: canary-demo
+      - name: Load image into the cluster
+        run: |
+          docker load -i /tmp/canary-demo.tar
+          kind load docker-image "$IMAGE" --name canary-demo
+      - name: Install Argo Rollouts (checksum-verified manifest)
+        run: scripts/install-rollouts.sh
+      - name: Deploy v1, Prometheus and load generator
+        run: scripts/deploy.sh
+
+      - name: "Release v2 (healthy): expect promotion"
+        run: scripts/release.sh v2
+      - name: Users are on v2
+        run: scripts/verify-traffic.sh v2
+
+      - name: "Release v3 (50% errors): expect automatic rollback"
+        run: EXPECT=Degraded scripts/release.sh v3 0.5
+      - name: Users are still on v2
+        run: scripts/verify-traffic.sh v2
+
+      - name: "Release v4 (400 ms latency): expect automatic rollback"
+        run: EXPECT=Degraded scripts/release.sh v4 0 400
+      - name: Users are still on v2
+        run: scripts/verify-traffic.sh v2
+
+      - name: "Revert to v2 (GitOps: revert the bad commit): expect healthy at once"
+        run: TIMEOUT=60 scripts/release.sh v2
+      - name: Users are on v2
+        run: scripts/verify-traffic.sh v2
+
+      - name: Job summary
+        if: ${{ success() }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Canary delivery results
+          | Release | Change | Result |
+          |---|---|---|
+          | v2 | healthy | ✅ promoted after canary analysis |
+          | v3 | 50% HTTP 500s | ✅ aborted by error-rate check, users stayed on v2 |
+          | v4 | +400 ms latency | ✅ aborted by p95 latency check, users stayed on v2 |
+          | v2 | revert | ✅ healthy immediately, no canary needed |
+          EOF
+      - name: Cluster diagnostics
+        if: ${{ failure() }}
+        run: |
+          kubectl -n canary-demo get rollout,analysisrun,replicaset,pods -o wide || true
+          kubectl -n canary-demo get rollout canary-demo -o yaml || true
+          for run in $(kubectl -n canary-demo get analysisrun -o name); do
+            kubectl -n canary-demo get "$run" -o yaml
+          done
+          kubectl -n argo-rollouts logs deployment/argo-rollouts --tail=200 || true
+          kubectl -n canary-demo logs deployment/canary-demo-loadgen --tail=50 || true
