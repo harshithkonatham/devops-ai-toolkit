@@ -4,7 +4,7 @@
 # under us. Dependabot proposes digest updates.
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS deps
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS deps
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY pyproject.toml uv.lock ./
@@ -15,7 +15,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
  && pip install --no-cache-dir --require-hashes --no-deps --only-binary=:all: \
       --target /build/deps -r requirements.txt
 
-FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS runtime
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
 LABEL org.opencontainers.image.title="payments-api" \
       org.opencontainers.image.source="https://github.com/harshithkonatham/devops-ai-toolkit"
 
@@ -24,7 +24,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/deps:/app/src \
     DATABASE_PATH=/data/payments.db
 
-RUN groupadd --system --gid 10001 app \
+# Debian security fixes land before the base image is rebuilt, so apply them here. pip is
+# removed because dependencies were installed in the deps stage; at runtime it is unused.
+RUN apt-get update \
+ && apt-get -y upgrade --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && python -m pip uninstall --yes --root-user-action=ignore pip \
+ && groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
  && mkdir /data && chown app:app /data
 
