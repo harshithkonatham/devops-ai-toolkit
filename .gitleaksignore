@@ -1,10 +1,10 @@
-# Gitleaks findings reviewed and accepted. One fingerprint per line: commit:file:rule:line.
-# None are secrets:
-# - payments-api tests: a test-only JWT key (marked "gitleaks:allow" in later commits) and
-#   "Idempotency-Key" request headers
-# - kubernetes README: the base64 of a placeholder password in an example Secret manifest
+# Reviewed false positives: dummy test values in commit 0692bc82aaa97322ac4e501ca082af094f75c6e6, before inline
+# "gitleaks:allow" comments were added. Format: commit:file:rule:line
+# (Re-pointed from c7a3057f, which no longer exists after the history rewrite on 2026-10-29.)
 0692bc82aaa97322ac4e501ca082af094f75c6e6:projects/payments-api/tests/conftest.py:generic-api-key:33
 0692bc82aaa97322ac4e501ca082af094f75c6e6:projects/payments-api/tests/integration/test_outbox.py:generic-api-key:25
 0692bc82aaa97322ac4e501ca082af094f75c6e6:projects/payments-api/tests/integration/test_transactions_api.py:generic-api-key:93
 0692bc82aaa97322ac4e501ca082af094f75c6e6:projects/payments-api/tests/integration/test_transactions_api.py:generic-api-key:107
+# Docs example Secret: base64 of "password123"
 8b410924023ab1142046497f90fbede685d52c02:tools/devops/kubernetes/README.md:generic-api-key:347
+tools/devops/kubernetes/README.md:generic-api-key:347
