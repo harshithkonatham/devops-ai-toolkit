@@ -18,6 +18,7 @@ keywords:
 Netflix is a subscription streaming service with over 300 million paid memberships in more than 190 countries. That is the last figure it reported, for Q4 2024; it stopped publishing subscriber counts in 2025. Its revenue was about $39 billion in 2024. The core problem DevOps solves for Netflix is this: **thousands of engineers must ship changes every day without interrupting playback for hundreds of millions of people.** Netflix's answer is a self-service platform (the "paved road"), automated delivery with canary analysis, active-active multi-region hosting on AWS, its own CDN, and a habit of breaking things on purpose so that real failures are survivable.
 
 > **Data labels used in this document**
+>
 > - **Reported**: Netflix has stated it publicly (tech blog, earnings, conference talks).
 > - **Estimated**: a representative figure, given for illustration only.
 
@@ -184,18 +185,22 @@ flowchart LR
 ## 5. Key Challenges and How They Were Solved
 
 ### Challenge 1: The data centre was a single point of failure
+
 - **Problem:** the 2008 database corruption stopped the business for days (**reported**).
 - **Response:** a seven-year migration to AWS, redesigning around stateless services and distributed databases, not lifting and shifting.
 
 ### Challenge 2: Cloud outages are outside your control
+
 - **Problem:** AWS regional incidents, including the widely reported AWS load-balancer outage on Christmas Eve 2012, took Netflix down.
 - **Response:** active-active multi-region, Zuul-based traffic steering, and regular evacuation drills, so that losing a region is a routine operation.
 
 ### Challenge 3: Thousands of services, thousands of deploys
+
 - **Problem:** manual release checks don't scale, and one bad deploy can affect every member.
 - **Response:** Spinnaker plus automated canary analysis, immutable images and instant red/black rollback.
 
 ### Challenge 4: Live events break the on-demand playbook
+
 - **Problem:** on-demand traffic is predictable and can be pre-cached. Live events create sudden, synchronized peaks. Netflix's November 2024 live boxing event had widely reported buffering for some viewers.
 - **Response (reported in general terms):** dedicated live-streaming infrastructure and capacity planning, and an investment in live encoding and delivery that was tested on later live events. **Lesson:** a new traffic shape needs new load tests, even for a mature platform.
 
@@ -221,6 +226,7 @@ flowchart LR
 Costs are **estimated** monthly cloud spend, not counting content licensing or staff.
 
 ### Phase 1: MVP (0–10k users) · ~$500–$3,000/month
+
 - One cloud region and a managed platform (ECS/Fargate, Cloud Run or App Runner)
 - Managed Postgres plus a Redis cache
 - A video platform as a service (Mux, Cloudflare Stream, AWS IVS/MediaConvert) instead of your own encoding
@@ -229,6 +235,7 @@ Costs are **estimated** monthly cloud spend, not counting content licensing or s
 - Basic observability: uptime checks, logs, and a "plays started" metric
 
 ### Phase 2: Growth (10k–1M users) · ~$10,000–$80,000/month
+
 - Kubernetes (EKS/GKE) once there are more than about 10 services
 - Multi-AZ everything, and read replicas
 - Kafka or a managed event bus for viewing events
@@ -237,6 +244,7 @@ Costs are **estimated** monthly cloud spend, not counting content licensing or s
 - A data warehouse (BigQuery, Snowflake) and a first recommendation model
 
 ### Phase 3: Scale (1M+ users) · ~$150,000–$1M+/month
+
 - Multi-region active-passive first, then active-active
 - Multi-CDN, or edge caches with ISPs in your largest markets
 - An internal developer platform (Backstage) as your "paved road"
