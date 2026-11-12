@@ -18,6 +18,7 @@ keywords:
 Monzo is a UK digital bank founded in 2015. It received a full banking licence in 2017 and has more than 12 million customers (**reported**, 2025). For the year to March 2025 it reported about £1.2 billion in revenue and its second year of profit (**reported**). Monzo runs almost entirely on AWS, as a very large set of small Go microservices on Kubernetes. The core problem DevOps solves for Monzo is **moving fast like a tech startup while meeting the reliability and audit demands of a regulated bank**: customers expect their card to work every time, and regulators expect proof that it will.
 
 > **Data labels used in this document**
+>
 > - **Reported**: Monzo has stated it publicly (blog, annual report, talks), or it was widely covered in the press.
 > - **Estimated**: a representative figure, given for illustration only.
 
@@ -119,6 +120,7 @@ The busiest layer for a bank:
 | Accountability | **SM&CR** | Named senior managers own technology and resilience risk |
 
 DevOps controls that put this into practice:
+
 - **Least-privilege, time-limited access** to production, with every action logged.
 - **No direct data access by default.** Break-glass access needs approval and is recorded.
 - **Peer review** on every change in the monorepo. Pipeline logs serve as audit evidence.
@@ -193,18 +195,22 @@ flowchart LR
 ## 5. Key Challenges and How They Were Solved
 
 ### Challenge 1: A platform component took down the whole bank (2017)
+
 - **What happened (reported):** in October 2017, an interaction between Monzo's service mesh, service discovery and Kubernetes caused services to fail to reach each other. Payments and the app were disrupted for over an hour. Monzo published a detailed post-mortem.
 - **Response:** upgrade testing for platform components, safer rollout of infrastructure changes, and better isolation, so that one shared component can't fail every service at once.
 
 ### Challenge 2: Scaling the database without breaking data (2019)
+
 - **What happened (reported):** in July 2019, a change while scaling the Cassandra cluster caused some customers to see incorrect data and failed actions for a period.
 - **Response:** more careful, staged operational procedures for stateful systems, and stronger reconciliation to detect and correct mismatches. **Lesson:** stateful infrastructure changes need the same canary-and-rollback discipline as code.
 
 ### Challenge 3: Thousands of services, one consistent standard
+
 - **Problem:** without standards, each service would log, retry and authenticate differently.
 - **Response:** one language (Go), one monorepo and one service framework, so the platform team can upgrade cross-cutting behaviour everywhere at once.
 
 ### Challenge 4: Growth outran financial-crime controls
+
 - **What happened (reported):** the FCA's 2025 fine focused on onboarding and monitoring controls that didn't keep pace with rapid customer growth.
 - **Response:** an investment in financial-crime controls and remediation. **Lesson:** treat compliance systems as production systems, with capacity planning, monitoring and alerts.
 
@@ -228,6 +234,7 @@ flowchart LR
 Costs are **estimated** monthly cloud spend, not counting compliance audits, BaaS partner fees or staff. Most startups begin on a **Banking-as-a-Service partner** (for example a licensed bank or e-money provider) instead of getting their own licence and scheme connections.
 
 ### Phase 1: MVP (pilot, partner-licensed) · ~$1,000–$5,000/month
+
 - One cloud region, **multi-AZ from day one** for anything that touches money
 - Managed Postgres (strong consistency is simpler than Cassandra at this size), with a double-entry ledger and idempotency keys
 - Card issuing and payments via a BaaS / issuer-processor API, which keeps PCI scope minimal
@@ -236,6 +243,7 @@ Costs are **estimated** monthly cloud spend, not counting compliance audits, Baa
 - Uptime checks on "payment success rate"
 
 ### Phase 2: Growth (10k–500k customers) · ~$15,000–$100,000/month
+
 - Kubernetes (EKS/GKE) with network policies and a service template
 - An event bus (Kafka or managed) for notifications and fraud features
 - Prometheus, Grafana and tracing, with SLOs on payment success and latency
@@ -244,6 +252,7 @@ Costs are **estimated** monthly cloud spend, not counting compliance audits, Baa
 - Real-time fraud rules first, then ML scoring
 
 ### Phase 3: Scale (own licence, 500k+ customers) · ~$200,000–$1M+/month
+
 - Map important business services, set impact tolerances and test them
 - Cloud exit plan and multi-region DR for critical services
 - Direct scheme connections (card network, Faster Payments) with redundant links
