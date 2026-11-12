@@ -1,0 +1,26 @@
+# Scrapes the canary-demo pods every 5s. The relabelling copies the
+# "rollouts-pod-template-hash" pod label onto every series as
+# "pod_template_hash", which is how the analysis tells canary pods from stable ones.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: canary-demo
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [canary-demo]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        regex: canary-demo
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: http
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
+        target_label: pod_template_hash
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
