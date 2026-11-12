@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import socket
+import struct
 import threading
 from collections import Counter
 from collections.abc import Iterator
@@ -30,6 +32,34 @@ def test_fetch_handles_http_errors(base_url: str) -> None:
 
 def test_fetch_handles_connection_errors() -> None:
     assert loadgen.fetch("http://127.0.0.1:9/", timeout=0.5) == (0, "-")
+
+
+@pytest.fixture
+def resetting_url() -> Iterator[str]:
+    """A server that resets each connection mid-request, like a pod being terminated."""
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+
+    def serve() -> None:
+        while True:
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                return
+            conn.recv(1024)
+            # SO_LINGER with a zero timeout makes close() send a TCP reset.
+            conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield f"http://127.0.0.1:{listener.getsockname()[1]}/"
+    listener.close()
+
+
+def test_fetch_survives_a_connection_reset(resetting_url: str) -> None:
+    # Regression: a reset used to escape fetch() and crash the load generator during rollouts.
+    assert loadgen.fetch(resetting_url) == (0, "-")
 
 
 def test_fetch_rejects_non_http_urls() -> None:
