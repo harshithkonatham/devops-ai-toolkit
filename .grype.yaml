@@ -1,0 +1,10 @@
+# Grype reads this file when CI scans container images. Each entry must name the CVE and the
+# exact package version, say why it is accepted, and say when to remove it.
+ignore:
+  # Fixed in CPython 3.14.11, but no official python:3.14-slim image ships 3.14.11 yet
+  # (checked 2026-11-12). Pinned to 3.14.10 so it stops applying the moment the image is
+  # upgraded; remove this entry in the Dependabot PR that bumps the base image digest.
+  - vulnerability: CVE-2026-119170
+    package:
+      name: python
+      version: 3.14.10

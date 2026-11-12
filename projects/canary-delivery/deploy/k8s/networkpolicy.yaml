@@ -1,0 +1,53 @@
+# Default deny for inbound traffic, then allow only the ports each pod serves.
+# The load generator serves nothing, so it accepts no inbound traffic at all.
+# Egress is left open: Prometheus needs DNS and the Kubernetes API for discovery.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: canary-demo
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-http-to-app
+  namespace: canary-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: canary-demo
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 8000
+          protocol: TCP
+---
+# The Argo Rollouts controller (another namespace) queries Prometheus here.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-to-prometheus
+  namespace: canary-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 9090
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress-to-loadgen
+  namespace: canary-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: canary-demo-loadgen
+  policyTypes: ["Ingress"]

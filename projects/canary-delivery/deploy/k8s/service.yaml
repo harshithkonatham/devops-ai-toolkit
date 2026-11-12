@@ -1,0 +1,17 @@
+# One Service in front of both stable and canary pods. Without a service mesh,
+# Argo Rollouts splits traffic by pod count: 1 canary pod out of 5 gets ~20%.
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-demo
+  namespace: canary-demo
+  labels:
+    app.kubernetes.io/name: canary-demo
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: canary-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

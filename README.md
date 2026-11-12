@@ -5,6 +5,7 @@ Updated: April 2026.
 
 [![Toolkit CI](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/ci.yml)
 [![payments-api](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/payments-api.yml/badge.svg)](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/payments-api.yml)
+[![canary-delivery](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/canary-delivery.yml/badge.svg)](https://github.com/harshithkonatham/devops-ai-toolkit/actions/workflows/canary-delivery.yml)
 
 ## Featured: Payments API (DevSecOps reference project)
 
@@ -20,6 +21,15 @@ working code:
   Hadolint, Checkov and Grype, plus an SBOM for every build
 - **Shipped like production:** hardened non-root container, deployed to a
   Kubernetes (kind) cluster in CI and smoke-tested there
+
+## Also: Canary delivery with Argo Rollouts
+
+[`projects/canary-delivery`](projects/canary-delivery) ships a new version to a
+Kubernetes cluster in steps. Argo Rollouts shifts traffic to the canary
+gradually while Prometheus checks its error rate and latency; if the checks
+fail, the rollout is aborted and traffic goes back to the stable version
+automatically. CI runs the whole flow on a kind cluster, including a bad
+release that must be rolled back.
 
 ## Repository Taxonomy
 

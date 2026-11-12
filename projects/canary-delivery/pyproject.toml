@@ -1,0 +1,52 @@
+[project]
+name = "canary-delivery"
+version = "0.1.0"
+description = "Canary releases with automatic rollback: Argo Rollouts + Prometheus analysis, tested in CI."
+readme = "README.md"
+requires-python = ">=3.13"
+# No runtime dependencies: the service and load generator use the standard library only.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "bandit>=1.8",
+]
+
+[tool.uv]
+# The app runs from src/ and is not installed as a package.
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["src/canary_demo"]
+branch = true
+omit = ["src/canary_demo/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S310"]  # asserts; urlopen only hits local test servers
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "src"
+packages = ["canary_demo"]

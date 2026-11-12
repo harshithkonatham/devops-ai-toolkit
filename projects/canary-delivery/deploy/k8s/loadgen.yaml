@@ -1,0 +1,50 @@
+# Steady traffic (~20 requests/s) through the Service, so the canary analysis
+# always has data. Uses the same image as the app.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canary-demo-loadgen
+  namespace: canary-demo
+  labels:
+    app.kubernetes.io/name: canary-demo-loadgen
+  annotations:
+    checkov.io/skip1: CKV_K8S_43=Image is built and loaded locally (kind), so it has no registry digest. A real deployment would pin the pushed digest.
+    checkov.io/skip2: CKV_K8S_15=IfNotPresent is required to use the locally loaded image in kind.
+    checkov.io/skip3: CKV_K8S_8=The load generator is a client with no server port, so there is nothing to probe for liveness.
+    checkov.io/skip4: CKV_K8S_9=The load generator is a client with no server port, so there is nothing to probe for readiness.
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: canary-demo-loadgen
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: canary-demo-loadgen
+    spec:
+      serviceAccountName: canary-demo
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: loadgen
+          image: canary-demo:dev
+          imagePullPolicy: IfNotPresent
+          args: ["canary_demo.loadgen", "run", "--url", "http://canary-demo/", "--rps", "20"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi

@@ -1,0 +1,1 @@
+"""Canary delivery demo service."""
