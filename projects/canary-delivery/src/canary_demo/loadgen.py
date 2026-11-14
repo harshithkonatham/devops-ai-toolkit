@@ -11,6 +11,7 @@ python -m canary_demo.loadgen sample --url http://canary-demo/ --count 50
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import time
 import urllib.error
@@ -32,7 +33,9 @@ def fetch(url: str, timeout: float = 2.0) -> tuple[int, str]:
             return resp.status, _version(resp.read())
     except urllib.error.HTTPError as err:
         return err.code, _version(err.read())
-    except (urllib.error.URLError, TimeoutError):
+    except (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException):
+        # Pods are terminated mid-request during a rollout (connection reset, closed early).
+        # Count that as a failed request instead of crashing the load generator.
         return 0, "-"
 
 
