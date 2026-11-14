@@ -18,6 +18,7 @@ keywords:
 Uber connects riders, eaters, drivers, couriers, merchants and freight shippers in 70+ countries. In 2024 it reported about $44 billion in revenue, more than 11 billion trips, and about 170 million monthly active consumers (**reported**). Unlike streaming or banking, Uber's product is a **live match between two moving parties**: a request that fails or slows down is a lost trip for the rider and lost income for the driver. The core problem DevOps solves for Uber is **keeping a location-aware, real-time system available and fast through sudden demand spikes, while thousands of engineers change it every day.**
 
 > **Data labels used in this document**
+>
 > - **Reported**: Uber has stated it publicly (engineering blog, annual report, talks), or it was widely covered in the press.
 > - **Estimated**: a representative figure, given for illustration only.
 
@@ -120,6 +121,7 @@ Two public incidents shaped Uber's security approach (**reported**):
 - **Related regulatory action:** in 2024 the Dutch data protection authority fined Uber €290 million over transfers of European drivers' data to the US.
 
 DevOps controls these incidents point to:
+
 - **No secrets in code.** Use secret scanning in CI and a vault with short-lived credentials.
 - **Phishing-resistant MFA** (hardware keys or number matching), not simple push approval.
 - **Least privilege for admin tools**, with just-in-time access.
@@ -193,18 +195,22 @@ flowchart LR
 ## 5. Key Challenges and How They Were Solved
 
 ### Challenge 1: The monolith couldn't keep up
+
 - **Problem:** Uber's early Python monolith and single Postgres database couldn't handle growth (**reported**).
 - **Response:** a move to microservices and Schemaless, with trip data moved in "Project Mezzanine" (2014).
 
 ### Challenge 2: Too many microservices
+
 - **Problem:** with thousands of services, a single feature could touch dozens of teams, and understanding dependencies became hard.
 - **Response:** **DOMA**: group services into domains with gateways and clear interfaces, and limit who can call what.
 
 ### Challenge 3: Security incidents through credentials
+
 - **Problem:** the 2016 and 2022 incidents both started with credentials, in a code repository and through MFA fatigue (**reported**).
 - **Response:** secret scanning, stronger MFA, tighter access to admin tools and better detection. **Lesson:** most breaches start with identity, not exotic exploits.
 
 ### Challenge 4: Owning data centres limited speed
+
 - **Problem:** hardware purchasing, refresh cycles and opening new regions are slow and capital-heavy.
 - **Response:** the 2023 multi-cloud agreements with Oracle and Google, plus a platform layer (Kubernetes + Up) so services can move without being rewritten.
 
@@ -229,6 +235,7 @@ flowchart LR
 This applies to ride-hailing, delivery, home services or any two-sided, location-based marketplace. Costs are **estimated** monthly cloud spend, not counting map/SMS API fees or staff.
 
 ### Phase 1: MVP (one city) · ~$500–$3,000/month
+
 - One cloud region, managed containers (Cloud Run, ECS/Fargate) and managed Postgres with **PostGIS** for location queries
 - Redis for live driver locations
 - Maps, routing and SMS from APIs (Google Maps, Mapbox, Twilio). Payments via Stripe or Razorpay, which keeps PCI scope minimal
@@ -236,6 +243,7 @@ This applies to ride-hailing, delivery, home services or any two-sided, location
 - One dashboard: requests vs completed matches
 
 ### Phase 2: Growth (several cities) · ~$10,000–$75,000/month
+
 - Kubernetes, multi-AZ, and a split into a few domains (riders, drivers, trips, payments), not dozens of services
 - Kafka or a managed stream for location and trip events, and a workflow engine (Temporal) for payouts and onboarding
 - Feature flags per city (LaunchDarkly, Unleash, Flagsmith)
@@ -243,6 +251,7 @@ This applies to ride-hailing, delivery, home services or any two-sided, location
 - First ML models: ETA and demand forecasting
 
 ### Phase 3: Scale (national or multi-country) · ~$150,000–$1M+/month
+
 - Multi-region, with trip state kept on the device for failover
 - Priority-based load shedding and pre-peak load testing
 - Data residency per country, and a data lake (Hudi/Iceberg) plus real-time analytics (Pinot, ClickHouse)
